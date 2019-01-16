@@ -55,7 +55,9 @@ public final class WmsUtilities {
         String[] authority = commonURI.getAuthority().split(":");
         URL url;
         String scheme = "http";
-        if (commonURI.getScheme() != null) scheme = commonURI.getScheme();
+        if (commonURI.getScheme() != null) {
+            scheme = commonURI.getScheme();
+        }
         if (authority.length == 2) {
             url = new URL(
                     scheme,
