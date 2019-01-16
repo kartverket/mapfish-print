@@ -54,16 +54,18 @@ public final class WmsUtilities {
             final ReferencedEnvelope bounds) throws FactoryException, URISyntaxException, IOException {
         String[] authority = commonURI.getAuthority().split(":");
         URL url;
+        String scheme = "http";
+        if (commonURI.getScheme() != null) scheme = commonURI.getScheme();
         if (authority.length == 2) {
             url = new URL(
-                    commonURI.getScheme(),
+                    scheme,
                     authority[0],
                     Integer.parseInt(authority[1]),
                     commonURI.getPath()
             );
         } else {
             url = new URL(
-                    commonURI.getScheme(),
+                    scheme,
                     authority[0],
                     commonURI.getPath()
             );
