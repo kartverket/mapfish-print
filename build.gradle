@@ -1,30 +1,38 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        jcenter()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+
+    dependencies {
+        classpath 'org.gretty:gretty:2.3.1'
+        classpath 'io.codearte.gradle.nexus:gradle-nexus-staging-plugin:0.20.0'
+        classpath 'de.marcphilipp.gradle:nexus-publish-plugin:0.2.0'
+        classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.7.1"
+        classpath "se.bjurr.violations:violations-gradle-plugin:1.24"
+    }
+}
+
 defaultTasks 'build'
 
-task wrapper(type: Wrapper) {
-    gradleVersion = '2.7'
-    scriptFile = "generated-gradlew"
+wrapper {
+    gradleVersion = '5.2.1'
+    distributionType = Wrapper.DistributionType.ALL
 }
 
 allprojects {
     group = 'org.mapfish.print'
-    version = '3.17.0'
+    version = '3.18.4'
     ext.junitVersion = "4.12"
-    ext.springVersion = "5.1.4.RELEASE"
-    ext.groovyVersion = "2.5.5"
+    ext.springVersion = "5.1.5.RELEASE"
+    ext.groovyVersion = "2.5.6"
+    ext.spotbugVersion = '3.1.12'
     ext."signing.keyId" = signing_keyId
     ext."signing.secretKeyRingFile" = System.properties.get('user.home') + '/.gnupg/secring.gpg'
     ext."signing.password" = signing_password
-}
-
-buildscript {
-  repositories {
-    jcenter()
-  }
-
-  dependencies {
-      classpath 'org.akhikhl.gretty:gretty:2.0.0'
-      classpath 'io.codearte.gradle.nexus:gradle-nexus-staging-plugin:0.12.0'
-  }
 }
 
 configurations.all {
@@ -33,64 +41,65 @@ configurations.all {
     }
 }
 
-apply plugin: 'org.akhikhl.gretty'
+apply plugin: 'org.gretty'
 
 import org.akhikhl.gretty.AppStartTask
+
 task appRun(type: AppStartTask) {
 }
 
-configure(subprojects.findAll {['core', 'examples', 'docs'].contains(it.name)}) {
+configure(subprojects.findAll { ['core', 'examples', 'docs'].contains(it.name) }) {
     repositories {
         mavenLocal()
         mavenCentral()
-        maven {url "http://download.osgeo.org/webdav/geotools"}
-        maven {url "https://dl.bintray.com/readytalk/maven"}
-        maven {url "http://jaspersoft.artifactoryonline.com/jaspersoft/third-party-ce-artifacts"}
-        maven {url "http://maven.geo-solutions.it"}
-        maven {url "https://jaspersoft.artifactoryonline.com/jaspersoft/jr-ce-releases"}
-        maven {url "https://repository.jboss.org/nexus/content/repositories/thirdparty-releases/"}
+        maven { url "http://download.osgeo.org/webdav/geotools" }
+        maven { url "https://dl.bintray.com/readytalk/maven" }
+        maven { url "http://jaspersoft.artifactoryonline.com/jaspersoft/third-party-ce-artifacts" }
+        maven { url "http://maven.geo-solutions.it" }
+        maven { url "https://jaspersoft.artifactoryonline.com/jaspersoft/jr-ce-releases" }
+        maven { url "https://repository.jboss.org/nexus/content/repositories/thirdparty-releases/" }
     }
 }
-configure(subprojects.findAll {['core', 'examples'].contains(it.name)}) {
+configure(subprojects.findAll { ['core', 'examples'].contains(it.name) }) {
     apply plugin: 'java'
-    apply plugin: 'findbugs'
+    apply plugin: 'com.github.spotbugs'
     apply plugin: 'eclipse'
     apply plugin: 'idea'
     apply plugin: 'project-report'
     apply plugin: 'checkstyle'
+    apply plugin: 'se.bjurr.violations.violations-gradle-plugin'
 
-    jar.dependsOn(checkstyleMain, findbugsMain)
+    jar.dependsOn(checkstyleMain)
 
     checkstyle {
         toolVersion = "7.8.2"
         configFile = file("$rootProject.rootDir/checkstyle_checks.xml")
         configProperties = ['basedir': project.rootDir.path]
-        ignoreFailures = false
+        ignoreFailures = true
         reportsDir = file("$project.buildDir/reports/checkstyleReports")
     }
     checkstyleTest.enabled = false
 
-    String fullVersion = System.getProperty("java.specification.version");
-    String findbugsToolVersion = "3.0.1"
-    if (fullVersion.startsWith("1.6")) {
-        findbugsToolVersion = "2.0.3"
-    }
-
-    findbugs {
-        toolVersion = findbugsToolVersion
-        ignoreFailures = false
-        reportsDir = file("$project.buildDir/reports/findbugsReports")
+    spotbugs {
+        toolVersion = "${project.spotbugVersion}"
+        ignoreFailures = true
+        reportsDir = file("$project.buildDir/reports/spotbugsReports")
         effort = "max"
         reportLevel = "high"
-        excludeFilter = file("$rootProject.projectDir/findbugs-exclude.xml")
     }
-    tasks.withType(FindBugs) {
-        reports {
-            xml.enabled = false
-            html.enabled = true
-        }
+    spotbugsTest.enabled = false
+
+    task violations(type: se.bjurr.violations.gradle.plugin.ViolationsTask) {
+        minSeverity = 'INFO'
+        detailLevel = 'VERBOSE' // PER_FILE_COMPACT, COMPACT or VERBOSE
+        maxViolations = 0
+        printViolations = true
+        violations = [
+                ["FINDBUGS", ".", ".*/reports/spotbugsReports/.*\\.xml", "Spotbugs"],
+                ["CHECKSTYLE", ".", ".*/reports/checkstyleReports/.*\\.xml", "Checkstyle"]
+        ]
     }
-    findbugsTest.enabled = false
+    check.finalizedBy violations
 
     sourceCompatibility = 1.8
     targetCompatibility = 1.8
@@ -98,9 +107,9 @@ configure(subprojects.findAll {['core', 'examples'].contains(it.name)}) {
     compileJava.options.compilerArgs = ['-Xlint:deprecation', '-Xlint:unchecked']
 
     dependencies {
-        testCompile (
+        testCompile(
                 "junit:junit:${project.junitVersion}",
-                'org.mockito:mockito-core:2.23.4',
+                'org.mockito:mockito-core:2.25.1',
                 "org.springframework:spring-test:${springVersion}"
         )
 
@@ -112,12 +121,6 @@ configure(subprojects.findAll {['core', 'examples'].contains(it.name)}) {
         maxHeapSize = "512m"
         testLogging {
             exceptionFormat = 'full'
-        }
-    }
-
-    sourceSets {
-        test {
-            output.resourcesDir = output.classesDir
         }
     }
 
@@ -135,7 +138,6 @@ if (Boolean.parseBoolean(enablePublishing)) {
 
     nexusStaging {
         packageGroup = 'org.mapfish'
-        stagingProfileId = '201d075c19938f'
         serverUrl = "https://$host/service/local/"
         username = sonatypeUsername
         password = sonatypePassword
